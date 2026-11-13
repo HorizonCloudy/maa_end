@@ -1,0 +1,73 @@
+# maa_end 打包规则。
+#
+# 为什么需要这个文件：打包器默认只排除 __pycache__/.git/dist 这类目录，
+# **不排除 `config/`**。而 `config/plugin.toml` 是「本机运行时配置」，
+# 里面写着 C:/Users/<用户名>/... 的绝对路径 —— 一旦打进市场包，
+# 既泄露隐私，别人装完也会因为路径不存在而报错。
+#
+# 依据：plugin/neko_plugin_cli/core/build_rules.py 的 load_build_rules()
+# 读取 `[tool.neko.build]`，支持 include / exclude / exclude_dirs / exclude_files。
+# 目录名不带 "/" 时按 basename 匹配，所以 "config" 能命中任意层级的同名目录。
+
+[tool.neko.build]
+exclude_dirs = [
+  "config",       # 用户运行时配置（含本机绝对路径），安装时由宿主生成
+  ".claude",      # 本机 agent 工作流配置
+  ".workbuddy",   # 本机记忆文件
+  "docs",         # 开发文档，不属于运行时代码
+  "data/kb",      # 本地研究资产（游戏数据不分发）；运行时 KB 读兄弟插件 plugin_database
+  "data/maa-pi-runner",  # 运行时工作目录：PiRunner.prepare 从本机 MaaEnd 安装自动重建
+  "third_party/rtdetr_official",  # 训练代码，运行时零引用；3 个 LICENSE 文件保留
+  "data/yolo/*",  # yolo 全部子目录（训练帧/runs/预训练权重）；目录本身也不进 staging，避免空目录阻断元数据探针
+  "tools",        # 离线 KB/训练脚本，含本机绝对路径
+  "archive",      # 存档目录（仅 README）
+  ".playwright-mcp",  # 本机浏览器自动化痕迹
+  ".zcode",       # 本机会话数据
+  "pytest-of-*",  # pytest 临时空目录
+  "report-*",     # 测试报告空目录
+  "tmp*",         # 临时空目录
+]
+
+exclude_files = [
+  "Checkout.md",  # 交付核对单
+  "PROGRESS.md",  # 开发进度
+  "Stat.md",      # 模式总表
+  "stub-report.txt",  # 桩测试报告：含本机用户名路径
+  "RELEASE-PRECHECK-2026-10-23.md",  # 发布预检报告：含本机用户名路径
+  "HANDOFF.md",   # 会话交接文档
+  "AGENTS.md",    # 本机 agent 规则
+]
+
+# 发布包里不需要 PyTorch 训练权重：
+#   · 运行时由 maaend/scene.py 用 onnxruntime 加载 .onnx（第 116 行 InferenceSession）
+#   · data/scene/*.pt 是训练检查点，只给训练流程用，从不被插件 import
+# 5 个 .pt 共约 16.3 MB（约 3.26 MB × 5）。改用 glob 精确排除，避免误伤
+# data/yolo/*.pt —— 那两个是 ultralytics 运行时真正要加载的模型。
+exclude = [
+  "data/scene/*.pt",
+  # data/yolo 只保留 6 个运行时文件：默认两个 .pt 权重及其 .meta.json、
+  # wiki_ontology.json、endfield_items_classes.txt。其余均为训练资产：
+  "data/yolo/_*",         # 顶层临时文件
+  "data/yolo/*.py",       # 离线标注/训练脚本
+  "data/yolo/*.ts",       # mobileclip2_b.ts：运行时零引用
+  "data/yolo/operator_v*",      # 干员检测权重（config 默认关闭）及其 meta
+  "data/yolo/*backup*",   # 旧权重备份
+  "*.bak-*",              # 本地备份文件不进包
+]
+
+# ---------------------------------------------------------------------------
+# pytest 配置
+#
+# 为什么需要 asyncio_mode = "auto"：
+#   tests/test_executor_logic.py 里的 `test_nitrogen_flow` 是 `async def`，
+#   但全库没有任何 `@pytest.mark.asyncio`。pytest-asyncio 默认 STRICT 模式，
+#   遇到裸 async 测试会直接判失败：
+#       "async def functions are not natively supported"
+#   而 `neko-plugin check -r` 会用 pytest 跑整个 tests/ 目录，于是发布门禁红。
+#
+#   auto 模式 = 自动把 async 测试当 asyncio 测试跑，不需要每个都加装饰器。
+#   以后再加 async 测试也不会踩同一个坑。
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

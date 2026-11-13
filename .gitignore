@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+vendor/
+/.vendor.staging-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
+/.vendor.backup-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
+/.vendor.backup-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].pending
+dist/
+build/
+*.egg-info/
+store.db
+.env
+.DS_Store
+
+# --- 本机状态与私人笔记（含 C:/Users/... 本机路径），不进公开仓库 ---
+config/
+.claude/
+.workbuddy/
+tests/stub-report.txt
+data/scene/*.pt
+RELEASE-PRECHECK-2026-10-23.md
+
+# --- 测试临时产物 ---
+# 沙箱注入的 sitecustomize 会把 tempfile.tempdir 指向 cwd，导致 pytest tmp_path 与
+# 桩测试拷贝落在插件根（2026-11-04 实测累积 27 个目录 / 5.5 GB）。
+# 系统 temp 在沙箱里不可写，改不回去，所以只能靠忽略规则 + 定期清理。
+# 减量的正解在 tests/maaend_stub_run.py 的 ignore 列表（不拷 .venv 与旧拷贝）。
+maa-end-stub-*/
+report-empty-*/
+report-test-*/
+pytest-of-*/
+/tmp*/

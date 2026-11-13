@@ -1,0 +1,196 @@
+[plugin]
+id = "maa_end"
+name = "终末地助手"
+description = "《明日方舟：终末地》游戏助手：陪玩辅助（陪聊默认开启，卡关自动提醒 + 宏观/精细分层建议）、场景判别（33 类）、YOLO 物品检测、OCR 文本识别、任务清单与 MAA 任务编排、每日任务规划、事件流直读。识别与辅助层只读，不触碰游戏进程、不注入输入、不上传数据；执行类入口由 allow_run 闸门控制（默认关闭）。战斗事件流（ZMDLogs 子进程）走网卡层抓包，由 zmdlogs_enabled 闸门控制（默认关闭）。"
+short_description = "Endfield companion: stuck-assist (auto-triggered, layered advice), scene classify (33 classes), YOLO detect, OCR, task catalog, daily orchestrator (read-only by default). Optional ZMDLogs battle-event stream behind its own gate."
+keywords = [
+    "终末地",
+    "endfield",
+    "明日方舟",
+    "maa",
+    "maafw",
+    "陪玩",
+    "陪聊",
+    "卡关",
+    "辅助",
+    "建议",
+    "场景判别",
+    "场景分类",
+    "YOLO",
+    "OCR",
+    "任务清单",
+    "每日任务",
+    "理智",
+    "识别",
+    "游戏",
+]
+version = "0.2.2"
+type = "plugin"
+entry = "plugin.plugins.maa_end:MaaEndPlugin"
+
+[plugin.author]
+name = "local"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin.i18n]
+default_locale = "zh-CN"
+locales_dir = "i18n"
+
+[plugin_runtime]
+enabled = true
+auto_start = true
+# 冷启动子进程在游戏运行时要 ~10s，宿主默认 10s 会误判超时
+timeout = 60
+
+# ---------------------------------------------------------------------------
+# 业务配置：安装后这一段会被复制到用户数据目录 config/plugin.toml，改那里才生效。
+# 本段是首次运行模板，路径一律留空走自动探测，不含任何本机绝对路径。
+# ---------------------------------------------------------------------------
+
+[maa]
+# MaaEnd 安装根目录（里面有 MaaEnd.exe、maafw/、interface.json、resource/）。
+# 留空 = 自动探测常见安装位置；找不到就只在 status 里如实报告。
+maaend_dir = ""
+
+# 游戏窗口匹配：写入 PI 配置，也用于 run_task 前的快速预检。
+window_class_regex = "UnityWndClass"
+window_title_regex = "Endfield"
+# 游戏核验：auto = 检测到终末地安装（鹰角启动器 games/Arknights Endfield/Endfield.exe）才开；on / off 强制。
+# 开启时 run_task 前要求匹配窗口（类名和标题都命中）属于已安装的 Endfield.exe。
+verify_game = "auto"
+
+# adb 可执行路径（手机端/模拟器用）。默认找 PATH 上的 adb。
+adb_path = "adb"
+
+# 任务执行总闸门：false 时 run_task 直接拒绝。只影响本插件。
+allow_run = false
+
+# 单次任务等待上限（秒）。任务在后台跑，run_task 立即返回，用 task_state 轮询。
+run_timeout_seconds = 7200
+
+# ---- 数据流（任务事件 / 窗口 / YOLO）----
+stream_enabled = true
+yolo_model = "endfield_yolo_v2.pt"   # 随插件附带的 9 类 YOLO 模型（data/yolo/ + .meta.json，enemy/operator/button/icon/name 等）
+yolo_confidence = 0.4
+# 干员专精模型（单类 operator）——可选第二路，留空 = 关闭。
+# 与 yolo_model 并行跑、结果合并进同一条 yolo 流，每个框带 source=main/operator 标记。
+# 权重来源与完整训练/评估方法见 docs/TRAINING-PIPELINE.md
+# （data/yolo/operator_v3.pt：mAP50 0.934 / P 0.953 / R 0.908，对干员的召回比 9 类模型高 5 个点）
+yolo_operator_model = ""
+yolo_operator_confidence = 0.3
+yolo_interval_seconds = 0
+window_interval_seconds = 5
+stream_max_entries = 300
+
+# ---- OCR 识别层（只读，不点击）----
+ocr_enabled = true
+ocr_min_confidence = 0.55
+ocr_ontology = "wiki_ontology.json"
+ocr_python = ""
+
+# ---- M1 控制服务（本地 fork 构建，可选）----
+control_url = ""
+control_spawn = true
+
+# ---- 模式调度（M0 只读 / M1 服务 / M2 内置 / M3 视觉代理 / M4 人工 / M5 操作回放·仅显式 / M6 GameScaling VLM·仅显式）----
+fail_demotion_threshold = 2
+nitrogen_target_process = "Endfield.exe"
+
+# ---- 套组集成（NitroGen + 游戏决策层；全部只读调用，关掉即回到单插件形态）----
+suite_enabled = true                  # 总开关：false 时 status/decide 不做任何跨插件探测
+decision_layer_id = "game_decision"   # 决策层插件（gd_route/gd_decide，ef_decide 派单用）
+nitrogen_agent_id = "nitrogen_agent"  # NitroGen 代理插件（run_task 前互斥探测）
+suite_mutual_exclusion = true         # NitroGen 在玩时拒绝启动 MaaPiCli（force=true 覆盖一次）
+
+# ---- M6 GameScaling 视觉语言代理（THUSI-Lab；帧 → 200ms 键鼠块 → SendInput 注入）----
+# 插件只做客户端：模型权重用户自行下载（HuggingFace THUSI-Lab/GameScaling-*）
+# 并用 vLLM 部署（bash scripts/serve_vllm.sh，见其 README），本机起在 8000 端口即可。
+# 三重闸门缺一不可：本开关 + allow_run + ef_gamescaling confirm=true。
+gamescaling_enabled = false            # 总闸门（默认关；false 时 ef_gamescaling start 直接拒绝）
+gamescaling_url = "http://127.0.0.1:8000/v1"  # vLLM OpenAI 兼容地址（含 /v1）
+gamescaling_model = "gamescaling"      # vLLM --served-model-name（脚本默认值）
+gamescaling_reasoning = true           # true=允许模型思考（准但慢）；false=直出动作（跟手）
+gamescaling_history_len = 5            # 上下文保留的历史决策数（每条=1帧+1动作，越大越慢）
+gamescaling_max_chunks = 0             # >0 跑满 N 个 200ms 块自动停（0=不限，手动 stop）
+gamescaling_max_consecutive_errors = 5 # 连续 N 次请求失败自动熔断（抬键停止）
+gamescaling_prompt = "endfield_system_prompt.txt"  # data/gamescaling/ 下的完整系统提示词；键位是草案，按游戏内设置改（data/gamescaling/build_prompt.py 重新生成）
+
+# ---- 场景判别模型（scene_sense 训练产物放 data/scene/）----
+scene_enabled = true
+scene_model = "scene_y26_33c.onnx"
+
+# ---- 陪玩辅助（陪聊默认 + 卡关辅助自动触发）----
+# 只读订阅本地事件流（ZMDLogs WS / logs 目录），不点击、不注入、不接管游戏。
+# 三项参数对应设置面板的三个 Select（改完即时生效，无需重启插件）。
+assist_enabled = true
+
+# 建议详细程度：宏观建议 = 只说失败原因类别；精细建议 = 额外给可执行动作。
+assist_mode = "宏观建议"
+
+# 精细建议的置信度门槛：归因置信度低于此值时不给精细建议（如实说明原因）。
+confidence_threshold = 0.85
+
+# 连续失败几次算卡关（触发主动提醒）。
+consecutive_fail_threshold = 3
+
+# 轮询间隔（秒）。
+assist_poll_seconds = 5
+
+# ZMDLogs 的 logs 目录（降级数据源）。留空 = 自动探测常见位置。
+assist_log_dir = ""
+
+# 事件流 WS 地址。留空 = ws://127.0.0.1:29325/ws
+assist_ws_url = ""
+
+# ---- 战斗事件流（ZMDLogs 子进程；抓包层，默认关闭）----
+# 与上面识别层不同：ZMDLogs 在网卡层抓游戏流量并用 RSA 私钥解密，需要
+# Npcap + 管理员权限 + 私钥文件，权限模型更高，所以单独设闸门。
+# 源码/exe 都不入插件目录，按下面配的路径拉起子进程。
+zmdlogs_enabled = false
+
+# 是否随插件启动自动拉起。false = 只在 ef_zmdlogs_status(action=start) 时才起。
+zmdlogs_autostart = true
+
+# 启动模式：exe = 拉预构建 EndfieldLogs.exe（自带密钥，开箱即用，推荐）；
+# source = 跑源码树（需外部 RSA 私钥，上游不提供，缺它必秒退）。留空 = 配了 exe 路径按 exe，否则按 source。
+zmdlogs_launch_mode = "exe"
+
+# 预构建 EndfieldLogs.exe 路径（exe 模式）。留空 = 探测 Downloads/Desktop/AppData 下的 EndfieldLogs 目录。
+zmdlogs_exe = ""
+
+# ZMDLogs 源码目录（里面有 src/endfieldlogs/cli.py）。留空 = 探测 %USERPROFILE%/ZMDLogs 等常见位置。
+zmdlogs_repo = ""
+
+# 解释器。留空 = 优先用仓库的 .venv/Scripts/python.exe，再退 PATH 上的 python。
+zmdlogs_python = ""
+
+# 事件流 WS 端口。留空 = 29325（ZMDLogs 的默认值）。
+zmdlogs_ws_port = 29325
+
+# 事件日志目录（logs/<日期>/session_*.ndjson，也是卡关辅助的降级数据源）。
+# 留空 = exe/仓库下的 logs/。
+zmdlogs_log_dir = ""
+
+# RSA 私钥文件路径（仅 source 模式需要）。留空 = 在仓库里找 rsa_keys.txt 或 src/endfieldlogs/embedded_keys.py。
+# 注意：ZMDLogs 上游不提供该文件，需自行准备；exe 模式不需要它。
+zmdlogs_rsa_key = ""
+
+# 子进程日志级别。
+zmdlogs_log_level = "INFO"
+
+# ---------------------------------------------------------------------------
+# Hosted UI（陪玩辅助面板：三项参数 Select + 状态 + 最近建议）
+# ---------------------------------------------------------------------------
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "assist"
+title = "终末地助手 · 陪玩辅助"
+entry = "ui/panel.tsx"
+context = "maa_end_assist"
+permissions = ["state:read", "action:call"]

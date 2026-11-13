@@ -1,0 +1,3537 @@
+{
+  "build_env": {
+    "arch": "",
+    "os": "win32",
+    "python": "3.11"
+  },
+  "entries": [
+    {
+      "auto_start": false,
+      "description": "ADB 设备列表与截图（手机端/模拟器数据截取）。action=list 列设备（adb devices -l）；action=screenshot 对 serial 截图（exec-out screencap），PNG 存 data/adb/ 并返回路径与大小。adb 路径由 maa.adb_path 配置（默认 PATH 上的 adb）。",
+      "event_key": "maa_end.ef_adb",
+      "event_type": "plugin_entry",
+      "id": "ef_adb",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list / screenshot",
+            "type": "string"
+          },
+          "serial": {
+            "default": "",
+            "description": "screenshot 时的设备地址",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "ADB 设备",
+      "return_message": "",
+      "timeout": 30.0
+    },
+    {
+      "auto_start": false,
+      "description": "陪聊默认 + 卡关辅助。action=state（默认，看状态与最近建议）/ config（读三项参数）/ set（改参数，即时生效，无需重启）/ check（立即跑一次判定）/ advice（对给定事件做一次分层输出，供对话内联调用；events_json 留空时用实时缓冲，需辅助在跑，只覆盖进行中的战斗，缓冲可能为空）。visual=true 时在 state/check 结果里附「场景佐证」（截屏+场景分类，只读；佐证仅供参考，不参与判定）。只读订阅本地事件流，**不点击、不注入、不接管游戏**。",
+      "event_key": "maa_end.ef_assist",
+      "event_type": "plugin_entry",
+      "id": "ef_assist",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "state",
+            "description": "state / config / set / check / advice",
+            "type": "string"
+          },
+          "assist_mode": {
+            "default": "",
+            "description": "宏观建议 / 精细建议（空=不改）",
+            "type": "string"
+          },
+          "confidence_threshold": {
+            "default": "",
+            "description": "0.70 / 0.80 / 0.85 / 0.90（空=不改）",
+            "type": "string"
+          },
+          "consecutive_fail_threshold": {
+            "default": "",
+            "description": "2 / 3 / 5（空=不改）",
+            "type": "string"
+          },
+          "enable": {
+            "default": "",
+            "description": "true/false（空=不改）",
+            "type": "string"
+          },
+          "events_json": {
+            "default": "",
+            "description": "advice 用：事件 JSON 数组；留空=用实时缓冲（需辅助在跑，只覆盖进行中的战斗，缓冲可能为空）",
+            "type": "string"
+          },
+          "profile": {
+            "default": "",
+            "description": "A/B 配置档（空=用当前档）；改参数时写到该档",
+            "type": "string"
+          },
+          "visual": {
+            "default": "",
+            "description": "true=附场景佐证（截屏+场景分类，只读）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "陪玩辅助",
+      "return_message": "",
+      "timeout": 20.0
+    },
+    {
+      "auto_start": false,
+      "description": "读 ZMDLogs 最近 N 个 session 事件流，生成对局 Markdown 复盘报告（战斗数 / 时长 / 伤害 / 阵亡 / 技能 / 失败判定与归因）。只读：不订阅、不注入、不写盘。",
+      "event_key": "maa_end.ef_report",
+      "event_type": "plugin_entry",
+      "id": "ef_report",
+      "input_schema": {
+        "properties": {
+          "max_battles": {
+            "default": 50,
+            "description": "最多分析的战斗场数（默认 50，保留最近）",
+            "type": "integer"
+          },
+          "sessions": {
+            "default": 1,
+            "description": "读取最近的 session 文件数（默认 1）",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "battles",
+        "report"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "battles": {},
+          "report": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "battles",
+          "report"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "战斗复盘",
+      "return_message": "",
+      "timeout": 120.0
+    },
+    {
+      "auto_start": false,
+      "description": "把『帮我做终末地日常/基质/跑商…』这类请求交给游戏决策层（game_decision：gd_route 定意图 + gd_decide 对任务清单逐个打分），返回排序后的候选任务与理由；决策层不可用时退回词面匹配并如实标注 source。run=true 时直接执行第一候选（闸门与互斥同 ef_run_task）。",
+      "event_key": "maa_end.ef_decide",
+      "event_type": "plugin_entry",
+      "id": "ef_decide",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 5,
+            "description": "候选任务数上限（默认 5）",
+            "type": "integer"
+          },
+          "request": {
+            "description": "用户请求原文，如『清一下终末地日常』",
+            "type": "string"
+          },
+          "run": {
+            "default": false,
+            "description": "true=执行第一候选（需 maa.allow_run 放行）",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "candidates",
+        "route",
+        "engine"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "candidates": {},
+          "engine": {},
+          "route": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "candidates",
+          "route",
+          "engine"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "决策层派单",
+      "return_message": "",
+      "timeout": 120.0
+    },
+    {
+      "auto_start": false,
+      "description": "3 套 Endaxis 排轴预设（开荒/精英/BOSS）。action=list 列预设；code 生成数据码（可粘进 MaaEnd 排轴设置）；compare 解析社区分享的轴码并与预设对比结构；run 经 RealTimeTask 的自动战斗排轴模式执行（与 ef_run_task 同一闸门与互斥）。members 是队伍人数 1-4，1 号位放主 C。",
+      "event_key": "maa_end.ef_endaxis",
+      "event_type": "plugin_entry",
+      "id": "ef_endaxis",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list | code | compare | run",
+            "type": "string"
+          },
+          "code": {
+            "default": "",
+            "description": "compare 用：社区分享的轴数据码（base64url+gzip）",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "run 时套组互斥覆盖（同 ef_run_task）",
+            "type": "boolean"
+          },
+          "members": {
+            "default": 4,
+            "description": "队伍人数 1-4（超出号位的动作会被丢掉）",
+            "type": "integer"
+          },
+          "preset": {
+            "default": "开荒",
+            "description": "开荒 | 精英 | BOSS",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "排轴预设",
+      "return_message": "",
+      "timeout": 120.0
+    },
+    {
+      "auto_start": false,
+      "description": "M6：THUSI-Lab GameScaling（Qwen3.5 续训游戏 VLM）直接游玩——截图发用户自部署的 vLLM 服务，模型回 200ms 键鼠块，经 SendInput 真实注入。三重闸门：maa.gamescaling_enabled=true + maa.allow_run=true + confirm=true（缺一不可）。action=start 启动（前提：游戏开着、vLLM 在线、data/gamescaling/ 有系统提示词）；action=stop 停止并抬起全部按键；action=status（默认）看运行状态/解析率/延迟。与 M3 同级：无完成保证，人要看着。",
+      "event_key": "maa_end.ef_gamescaling",
+      "event_type": "plugin_entry",
+      "id": "ef_gamescaling",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "status",
+            "description": "start / stop / status",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "start 必填 true（用户明确同意键鼠接管）",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：NitroGen 正在玩时也强行启动（默认否）",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "GameScaling 视觉语言代理（M6）",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "查已采集的终末地资料：全文检索（干员/武器/物品/装备/敌人/剧情/任务/教学）、实体属性、干员清单、基建配方、MaaEnd 界面节点、辅助工具清单。数据来自 warfarin.wiki 全量、MaaEnd 界面流程、IndustrialPlanner 配方，均带来源与抓取时间。只读。",
+      "event_key": "maa_end.ef_kb",
+      "event_type": "plugin_entry",
+      "id": "ef_kb",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "search",
+            "description": "search=全文检索 | entity=实体详情 | operators=干员清单 | recipe=基建配方 | node=界面节点 | tool=工具清单 | doc=单篇正文 | gamefile=解包产物索引 | gametable=游戏配置表 | gem=基质反查武器 | poi=地图兴趣点 | stats=库存统计",
+            "type": "string"
+          },
+          "category": {
+            "default": "",
+            "description": "doc=分类限定；gamefile=组名；gametable=条目 key；poi=区域",
+            "type": "string"
+          },
+          "limit": {
+            "default": 8,
+            "description": "返回条数上限（默认 8）",
+            "type": "integer"
+          },
+          "near": {
+            "default": "",
+            "description": "poi 用：'x,y,z' 世界坐标，给了就按距离由近到远排",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "description": "检索词 / 实体名 / 物品ID / 节点描述 / 文档 slug / 表名 / POI类型",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "action",
+        "query",
+        "result"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "action": {},
+          "query": {},
+          "result": {}
+        },
+        "required": [
+          "action",
+          "query",
+          "result"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "终末地知识库",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "列出 MaaEnd interface.json 里声明的全部任务（名称、入口节点、描述、选项）。",
+      "event_key": "maa_end.ef_list_tasks",
+      "event_type": "plugin_entry",
+      "id": "ef_list_tasks",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "tasks"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "summary": {},
+          "tasks": {}
+        },
+        "required": [
+          "summary",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "任务清单",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "七模式 probe 汇总（DESIGN-maaend-suite-modes.md）：M0 只读陪伴 / M1 MaaEndControl 控制服务 / M2 内置 PiRunner / M3 NitroGen 视觉代理 / M4 人工辅助 / M5 操作回放（operation_learner，仅显式进入）/ M6 GameScaling 视觉语言代理（VLM 键鼠，仅显式进入）。返回各模式可用性、当前选中与原因、失败计数，以及 MaaEnd 无效时的替代提议（M3 需用户确认）。只读，不拉起任何进程。",
+      "event_key": "maa_end.ef_modes",
+      "event_type": "plugin_entry",
+      "id": "ef_modes",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "chosen",
+        "reason",
+        "modes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "chosen": {},
+          "modes": {},
+          "reason": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "chosen",
+          "reason",
+          "modes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "执行模式阶梯",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "对终末地窗口截图跑 OCR（rapidocr，视觉 sidecar 执行，会把游戏带到前台）：返回 full_text 与逐行 lines（文本/置信度/框）。roi 可选 [x1,y1,x2,y2]（0-1 比例，JSON 数组）缩小范围提速。问「现在理智多少」「屏幕上写了什么」用它。",
+      "event_key": "maa_end.ef_ocr",
+      "event_type": "plugin_entry",
+      "id": "ef_ocr",
+      "input_schema": {
+        "properties": {
+          "roi": {
+            "default": "",
+            "description": "ROI [x1,y1,x2,y2]（0-1 比例）JSON 数组；空=全屏",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "full_text",
+        "lines"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "full_text": {},
+          "lines": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "full_text",
+          "lines"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "读屏 OCR",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "启动 MaaEnd 应用本体（ automation 仍在 GUI 里操作时的备用入口）。",
+      "event_key": "maa_end.ef_open_app",
+      "event_type": "plugin_entry",
+      "id": "ef_open_app",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "打开 MaaEnd",
+      "return_message": "",
+      "timeout": 30.0
+    },
+    {
+      "auto_start": false,
+      "description": "M4 人工辅助：设一个提醒到点推送。kind=after_task（任务结束触发，value 填任务 entry 或留空=任意）、at_time（每天 HH:MM）、in_minutes（N 分钟后）。会话内存态：插件重载后清空（ef_reminders 可查/可取消）。",
+      "event_key": "maa_end.ef_remind",
+      "event_type": "plugin_entry",
+      "id": "ef_remind",
+      "input_schema": {
+        "properties": {
+          "kind": {
+            "default": "in_minutes",
+            "description": "after_task / at_time / in_minutes",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "提醒附言（可空）",
+            "type": "string"
+          },
+          "value": {
+            "default": "30",
+            "description": "after_task=任务entry(空=任意)；at_time=HH:MM；in_minutes=分钟数",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "设置提醒",
+      "return_message": "",
+      "timeout": 15.0
+    },
+    {
+      "auto_start": false,
+      "description": "查看/取消 M4 提醒。action=list（默认，含已触发历史）；action=cancel 时给 id 取消。",
+      "event_key": "maa_end.ef_reminders",
+      "event_type": "plugin_entry",
+      "id": "ef_reminders",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list / cancel",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "description": "取消时给提醒 id（如 r1）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "提醒清单",
+      "return_message": "",
+      "timeout": 15.0
+    },
+    {
+      "auto_start": false,
+      "description": "M5：调 operation_learner 回放「示教/学习」到的操作（跨插件调用）。dry_run=true（默认）只校验预演、不注入输入；dry_run=false 会真实注入输入——需 maa.allow_run=true 且 confirm=true（与 M1/M2/M3 同级闸门）。",
+      "event_key": "maa_end.ef_replay",
+      "event_type": "plugin_entry",
+      "id": "ef_replay",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "非 dry_run 必填 true（用户明确同意注入）",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": true,
+            "description": "true = 只校验预演不注入（默认）",
+            "type": "boolean"
+          },
+          "intent": {
+            "default": "",
+            "description": "意图关键词（检索用）",
+            "type": "string"
+          },
+          "precision": {
+            "default": "auto",
+            "description": "auto / coarse / fine",
+            "type": "string"
+          },
+          "record_id": {
+            "default": "",
+            "description": "按记录 id 回放（空 = 按场景+意图检索）",
+            "type": "string"
+          },
+          "scene_id": {
+            "default": "",
+            "description": "场景 id（空 = 用 operation_learner 当前感知）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "操作回放（M5）",
+      "return_message": "",
+      "timeout": 90.0
+    },
+    {
+      "auto_start": false,
+      "description": "经 MaaEnd 官方运行器 MaaPiCli（-d 直通模式，完整 PI 语义：选项 case、agent 子进程）执行一个任务：写好 PI 配置后启动运行器，立即返回。name 用 list_tasks 里的任务名；options_json 是选项选择映射，例如 {\"选项名\": \"case 名\"}（可用值见 list_tasks 的 option_definitions）。NitroGen 代理正在玩时会拒绝（force=true 覆盖）。",
+      "event_key": "maa_end.ef_run_task",
+      "event_type": "plugin_entry",
+      "id": "ef_run_task",
+      "input_schema": {
+        "properties": {
+          "adb_serial": {
+            "default": "",
+            "description": "ADB 控制器的设备地址（adb devices 的 serial，如 127.0.0.1:5555）",
+            "type": "string"
+          },
+          "controller": {
+            "default": "",
+            "description": "显式控制器名（空=自动：Windows 优先 Win32）；ADB/CloudADB 走手机端",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：NitroGen 正在玩时也强行启动（默认否）",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "任务名（先用 list_tasks 查，清单随 MaaEnd 版本变化）",
+            "type": "string"
+          },
+          "options_json": {
+            "default": "",
+            "description": "选项选择映射，JSON 对象，例如 {\"SellProductSchedule\": \"Daily\"}；默认空",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "执行任务",
+      "return_message": "",
+      "timeout": 120.0
+    },
+    {
+      "auto_start": false,
+      "description": "场景判别模型是否就绪：模型路径、类别表、加载耗时。排查 ef_scene 报错时先跑这个。",
+      "event_key": "maa_end.ef_scene_status",
+      "event_type": "plugin_entry",
+      "id": "ef_scene_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "exists",
+        "ready",
+        "classes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "classes": {},
+          "exists": {},
+          "ready": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "exists",
+          "ready",
+          "classes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "场景模型状态",
+      "return_message": "",
+      "timeout": 30.0
+    },
+    {
+      "auto_start": false,
+      "description": "M3：切换套组模式到 nitrogen 并启动 NitroGen 视觉代理接管游戏（通用但无完成保证，进度靠画面人肉判断）。危险操作：confirm 必须为 true（用户明确同意）；目标进程默认 maa.nitrogen_target_process。结束后用 ef_stop_task 还原（停代理 + 切回 decision）。",
+      "event_key": "maa_end.ef_agent",
+      "event_type": "plugin_entry",
+      "id": "ef_agent",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "用户明确同意接管手柄才能 true",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：有同伴在玩也强行启动（默认否）",
+            "type": "boolean"
+          },
+          "target_process": {
+            "default": "",
+            "description": "目标进程名（默认 maa.nitrogen_target_process）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "视觉代理接管",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "探测 MaaEnd 安装与运行库：安装路径、MaaFramework 版本、任务清单规模、游戏窗口是否在线、终末地本体安装与 verify_game 核验、写闸门状态。排查问题时先跑这个。",
+      "event_key": "maa_end.ef_status",
+      "event_type": "plugin_entry",
+      "id": "ef_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "found",
+        "runtime_version",
+        "task_count",
+        "game_window",
+        "game_install",
+        "verify_game",
+        "allow_run"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "allow_run": {},
+          "found": {},
+          "game_install": {},
+          "game_window": {},
+          "runtime_version": {},
+          "summary": {},
+          "task_count": {},
+          "verify_game": {}
+        },
+        "required": [
+          "summary",
+          "found",
+          "runtime_version",
+          "task_count",
+          "game_window",
+          "game_install",
+          "verify_game",
+          "allow_run"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "状态",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "终止 MaaPiCli 运行器进程（任务立即停止；游戏本身不受影响）。",
+      "event_key": "maa_end.ef_stop_task",
+      "event_type": "plugin_entry",
+      "id": "ef_stop_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "停止任务",
+      "return_message": "",
+      "timeout": 30.0
+    },
+    {
+      "auto_start": false,
+      "description": "读取本插件数据流（tasks 任务事件 / window 窗口状态 / yolo 检测）。since 传上次返回的 latest_id 即增量拉取；跨插件可调（陪伴/决策链路用）。",
+      "event_key": "maa_end.ef_stream",
+      "event_type": "plugin_entry",
+      "id": "ef_stream",
+      "input_schema": {
+        "properties": {
+          "category": {
+            "default": "",
+            "description": "tasks / window / yolo；空=全部",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "description": "最多返回条数（默认 50）",
+            "type": "integer"
+          },
+          "since": {
+            "default": 0,
+            "description": "上次读到的最大 id（增量游标）",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count",
+        "latest_id"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {},
+          "latest_id": {}
+        },
+        "required": [
+          "count",
+          "latest_id"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "数据流读取",
+      "return_message": "",
+      "timeout": 30.0
+    },
+    {
+      "auto_start": false,
+      "description": "游戏插件套组全景：决策层（game_decision）引擎链状态、NitroGen 代理（nitrogen_agent）谁在玩、套组模式仲裁、本插件执行层状态，以及官方资源链接（MaaEnd / MAA / MaaFramework / BetterGI / NitroGen）。",
+      "event_key": "maa_end.ef_suite",
+      "event_type": "plugin_entry",
+      "id": "ef_suite",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "mode",
+        "decision_layer",
+        "nitrogen",
+        "links"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "decision_layer": {},
+          "links": {},
+          "mode": {},
+          "nitrogen": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "mode",
+          "decision_layer",
+          "nitrogen",
+          "links"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "套组全景",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "约定式状态入口（nitrogen_agent 等套组同伴探测『谁在玩』用）。running = MaaPiCli 是否正在执行任务。",
+      "event_key": "maa_end.status",
+      "event_type": "plugin_entry",
+      "id": "status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_schema": {},
+      "metadata": {},
+      "model_validate": true,
+      "name": "套组探测状态",
+      "return_message": "",
+      "timeout": 15.0
+    },
+    {
+      "auto_start": false,
+      "description": "查询 MaaPiCli 运行器的状态：运行中 / 已退出（退出码）+ 输出日志尾部。",
+      "event_key": "maa_end.ef_task_state",
+      "event_type": "plugin_entry",
+      "id": "ef_task_state",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "running",
+        "exit_code",
+        "output_tail"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "exit_code": {},
+          "output_tail": {},
+          "running": {}
+        },
+        "required": [
+          "running",
+          "exit_code",
+          "output_tail"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "任务进度",
+      "return_message": "",
+      "timeout": 30.0
+    },
+    {
+      "auto_start": false,
+      "description": "立即对终末地窗口截图跑一次 YOLO 目标检测（BetterGI 同款视觉路线；模型放 data/yolo/，默认随插件附带的终末地 9 类模型 endfield_yolo_v2.pt，可换自训模型）。跨插件可调：套组决策/陪伴链路用它看画面里有什么。返回 objects[{label,confidence,box}]。",
+      "event_key": "maa_end.ef_yolo",
+      "event_type": "plugin_entry",
+      "id": "ef_yolo",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "count",
+        "objects"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {},
+          "objects": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "count",
+          "objects"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "YOLO 视觉检测",
+      "return_message": "",
+      "timeout": 60.0
+    },
+    {
+      "auto_start": false,
+      "description": "ZMDLogs 战斗事件流（伤害/连携/buff）的接入状态：闸门、源码目录、Npcap、RSA 私钥、子进程存活、WS 端口、最近 stderr。卡关辅助没有数据或事件流起不来时先跑这个。",
+      "event_key": "maa_end.ef_zmdlogs_status",
+      "event_type": "plugin_entry",
+      "id": "ef_zmdlogs_status",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "status",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "enabled",
+        "running",
+        "ws_open",
+        "ready",
+        "blocking"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "blocking": {},
+          "enabled": {},
+          "ready": {},
+          "running": {},
+          "summary": {},
+          "ws_open": {}
+        },
+        "required": [
+          "summary",
+          "enabled",
+          "running",
+          "ws_open",
+          "ready",
+          "blocking"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "战斗事件流状态",
+      "return_message": "",
+      "timeout": 30.0
+    }
+  ],
+  "entries_config_sha256": "",
+  "entry_methods": {},
+  "handlers": {
+    "maa_end.ef_adb": {
+      "auto_start": false,
+      "description": "ADB 设备列表与截图（手机端/模拟器数据截取）。action=list 列设备（adb devices -l）；action=screenshot 对 serial 截图（exec-out screencap），PNG 存 data/adb/ 并返回路径与大小。adb 路径由 maa.adb_path 配置（默认 PATH 上的 adb）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_adb",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list / screenshot",
+            "type": "string"
+          },
+          "serial": {
+            "default": "",
+            "description": "screenshot 时的设备地址",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "ADB 设备",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.ef_agent": {
+      "auto_start": false,
+      "description": "M3：切换套组模式到 nitrogen 并启动 NitroGen 视觉代理接管游戏（通用但无完成保证，进度靠画面人肉判断）。危险操作：confirm 必须为 true（用户明确同意）；目标进程默认 maa.nitrogen_target_process。结束后用 ef_stop_task 还原（停代理 + 切回 decision）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_agent",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "用户明确同意接管手柄才能 true",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：有同伴在玩也强行启动（默认否）",
+            "type": "boolean"
+          },
+          "target_process": {
+            "default": "",
+            "description": "目标进程名（默认 maa.nitrogen_target_process）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "视觉代理接管",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_assist": {
+      "auto_start": false,
+      "description": "陪聊默认 + 卡关辅助。action=state（默认，看状态与最近建议）/ config（读三项参数）/ set（改参数，即时生效，无需重启）/ check（立即跑一次判定）/ advice（对给定事件做一次分层输出，供对话内联调用；events_json 留空时用实时缓冲，需辅助在跑，只覆盖进行中的战斗，缓冲可能为空）。visual=true 时在 state/check 结果里附「场景佐证」（截屏+场景分类，只读；佐证仅供参考，不参与判定）。只读订阅本地事件流，**不点击、不注入、不接管游戏**。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_assist",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "state",
+            "description": "state / config / set / check / advice",
+            "type": "string"
+          },
+          "assist_mode": {
+            "default": "",
+            "description": "宏观建议 / 精细建议（空=不改）",
+            "type": "string"
+          },
+          "confidence_threshold": {
+            "default": "",
+            "description": "0.70 / 0.80 / 0.85 / 0.90（空=不改）",
+            "type": "string"
+          },
+          "consecutive_fail_threshold": {
+            "default": "",
+            "description": "2 / 3 / 5（空=不改）",
+            "type": "string"
+          },
+          "enable": {
+            "default": "",
+            "description": "true/false（空=不改）",
+            "type": "string"
+          },
+          "events_json": {
+            "default": "",
+            "description": "advice 用：事件 JSON 数组；留空=用实时缓冲（需辅助在跑，只覆盖进行中的战斗，缓冲可能为空）",
+            "type": "string"
+          },
+          "profile": {
+            "default": "",
+            "description": "A/B 配置档（空=用当前档）；改参数时写到该档",
+            "type": "string"
+          },
+          "visual": {
+            "default": "",
+            "description": "true=附场景佐证（截屏+场景分类，只读）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "陪玩辅助",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20.0
+    },
+    "maa_end.ef_decide": {
+      "auto_start": false,
+      "description": "把『帮我做终末地日常/基质/跑商…』这类请求交给游戏决策层（game_decision：gd_route 定意图 + gd_decide 对任务清单逐个打分），返回排序后的候选任务与理由；决策层不可用时退回词面匹配并如实标注 source。run=true 时直接执行第一候选（闸门与互斥同 ef_run_task）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_decide",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 5,
+            "description": "候选任务数上限（默认 5）",
+            "type": "integer"
+          },
+          "request": {
+            "description": "用户请求原文，如『清一下终末地日常』",
+            "type": "string"
+          },
+          "run": {
+            "default": false,
+            "description": "true=执行第一候选（需 maa.allow_run 放行）",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "candidates",
+        "route",
+        "engine"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "candidates": {},
+          "engine": {},
+          "route": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "candidates",
+          "route",
+          "engine"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "决策层派单",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end.ef_endaxis": {
+      "auto_start": false,
+      "description": "3 套 Endaxis 排轴预设（开荒/精英/BOSS）。action=list 列预设；code 生成数据码（可粘进 MaaEnd 排轴设置）；compare 解析社区分享的轴码并与预设对比结构；run 经 RealTimeTask 的自动战斗排轴模式执行（与 ef_run_task 同一闸门与互斥）。members 是队伍人数 1-4，1 号位放主 C。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_endaxis",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list | code | compare | run",
+            "type": "string"
+          },
+          "code": {
+            "default": "",
+            "description": "compare 用：社区分享的轴数据码（base64url+gzip）",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "run 时套组互斥覆盖（同 ef_run_task）",
+            "type": "boolean"
+          },
+          "members": {
+            "default": 4,
+            "description": "队伍人数 1-4（超出号位的动作会被丢掉）",
+            "type": "integer"
+          },
+          "preset": {
+            "default": "开荒",
+            "description": "开荒 | 精英 | BOSS",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "排轴预设",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end.ef_gamescaling": {
+      "auto_start": false,
+      "description": "M6：THUSI-Lab GameScaling（Qwen3.5 续训游戏 VLM）直接游玩——截图发用户自部署的 vLLM 服务，模型回 200ms 键鼠块，经 SendInput 真实注入。三重闸门：maa.gamescaling_enabled=true + maa.allow_run=true + confirm=true（缺一不可）。action=start 启动（前提：游戏开着、vLLM 在线、data/gamescaling/ 有系统提示词）；action=stop 停止并抬起全部按键；action=status（默认）看运行状态/解析率/延迟。与 M3 同级：无完成保证，人要看着。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_gamescaling",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "status",
+            "description": "start / stop / status",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "start 必填 true（用户明确同意键鼠接管）",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：NitroGen 正在玩时也强行启动（默认否）",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "GameScaling 视觉语言代理（M6）",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_kb": {
+      "auto_start": false,
+      "description": "查已采集的终末地资料：全文检索（干员/武器/物品/装备/敌人/剧情/任务/教学）、实体属性、干员清单、基建配方、MaaEnd 界面节点、辅助工具清单。数据来自 warfarin.wiki 全量、MaaEnd 界面流程、IndustrialPlanner 配方，均带来源与抓取时间。只读。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_kb",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "search",
+            "description": "search=全文检索 | entity=实体详情 | operators=干员清单 | recipe=基建配方 | node=界面节点 | tool=工具清单 | doc=单篇正文 | gamefile=解包产物索引 | gametable=游戏配置表 | gem=基质反查武器 | poi=地图兴趣点 | stats=库存统计",
+            "type": "string"
+          },
+          "category": {
+            "default": "",
+            "description": "doc=分类限定；gamefile=组名；gametable=条目 key；poi=区域",
+            "type": "string"
+          },
+          "limit": {
+            "default": 8,
+            "description": "返回条数上限（默认 8）",
+            "type": "integer"
+          },
+          "near": {
+            "default": "",
+            "description": "poi 用：'x,y,z' 世界坐标，给了就按距离由近到远排",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "description": "检索词 / 实体名 / 物品ID / 节点描述 / 文档 slug / 表名 / POI类型",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "action",
+        "query",
+        "result"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "action": {},
+          "query": {},
+          "result": {}
+        },
+        "required": [
+          "action",
+          "query",
+          "result"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "终末地知识库",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_list_tasks": {
+      "auto_start": false,
+      "description": "列出 MaaEnd interface.json 里声明的全部任务（名称、入口节点、描述、选项）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_list_tasks",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "tasks"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "summary": {},
+          "tasks": {}
+        },
+        "required": [
+          "summary",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "任务清单",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_modes": {
+      "auto_start": false,
+      "description": "七模式 probe 汇总（DESIGN-maaend-suite-modes.md）：M0 只读陪伴 / M1 MaaEndControl 控制服务 / M2 内置 PiRunner / M3 NitroGen 视觉代理 / M4 人工辅助 / M5 操作回放（operation_learner，仅显式进入）/ M6 GameScaling 视觉语言代理（VLM 键鼠，仅显式进入）。返回各模式可用性、当前选中与原因、失败计数，以及 MaaEnd 无效时的替代提议（M3 需用户确认）。只读，不拉起任何进程。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_modes",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "chosen",
+        "reason",
+        "modes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "chosen": {},
+          "modes": {},
+          "reason": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "chosen",
+          "reason",
+          "modes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "执行模式阶梯",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_ocr": {
+      "auto_start": false,
+      "description": "对终末地窗口截图跑 OCR（rapidocr，视觉 sidecar 执行，会把游戏带到前台）：返回 full_text 与逐行 lines（文本/置信度/框）。roi 可选 [x1,y1,x2,y2]（0-1 比例，JSON 数组）缩小范围提速。问「现在理智多少」「屏幕上写了什么」用它。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_ocr",
+      "input_schema": {
+        "properties": {
+          "roi": {
+            "default": "",
+            "description": "ROI [x1,y1,x2,y2]（0-1 比例）JSON 数组；空=全屏",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "full_text",
+        "lines"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "full_text": {},
+          "lines": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "full_text",
+          "lines"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "读屏 OCR",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_open_app": {
+      "auto_start": false,
+      "description": "启动 MaaEnd 应用本体（ automation 仍在 GUI 里操作时的备用入口）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_open_app",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "打开 MaaEnd",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.ef_remind": {
+      "auto_start": false,
+      "description": "M4 人工辅助：设一个提醒到点推送。kind=after_task（任务结束触发，value 填任务 entry 或留空=任意）、at_time（每天 HH:MM）、in_minutes（N 分钟后）。会话内存态：插件重载后清空（ef_reminders 可查/可取消）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_remind",
+      "input_schema": {
+        "properties": {
+          "kind": {
+            "default": "in_minutes",
+            "description": "after_task / at_time / in_minutes",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "提醒附言（可空）",
+            "type": "string"
+          },
+          "value": {
+            "default": "30",
+            "description": "after_task=任务entry(空=任意)；at_time=HH:MM；in_minutes=分钟数",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "设置提醒",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15.0
+    },
+    "maa_end.ef_reminders": {
+      "auto_start": false,
+      "description": "查看/取消 M4 提醒。action=list（默认，含已触发历史）；action=cancel 时给 id 取消。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_reminders",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list / cancel",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "description": "取消时给提醒 id（如 r1）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "提醒清单",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15.0
+    },
+    "maa_end.ef_replay": {
+      "auto_start": false,
+      "description": "M5：调 operation_learner 回放「示教/学习」到的操作（跨插件调用）。dry_run=true（默认）只校验预演、不注入输入；dry_run=false 会真实注入输入——需 maa.allow_run=true 且 confirm=true（与 M1/M2/M3 同级闸门）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_replay",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "非 dry_run 必填 true（用户明确同意注入）",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": true,
+            "description": "true = 只校验预演不注入（默认）",
+            "type": "boolean"
+          },
+          "intent": {
+            "default": "",
+            "description": "意图关键词（检索用）",
+            "type": "string"
+          },
+          "precision": {
+            "default": "auto",
+            "description": "auto / coarse / fine",
+            "type": "string"
+          },
+          "record_id": {
+            "default": "",
+            "description": "按记录 id 回放（空 = 按场景+意图检索）",
+            "type": "string"
+          },
+          "scene_id": {
+            "default": "",
+            "description": "场景 id（空 = 用 operation_learner 当前感知）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "操作回放（M5）",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 90.0
+    },
+    "maa_end.ef_report": {
+      "auto_start": false,
+      "description": "读 ZMDLogs 最近 N 个 session 事件流，生成对局 Markdown 复盘报告（战斗数 / 时长 / 伤害 / 阵亡 / 技能 / 失败判定与归因）。只读：不订阅、不注入、不写盘。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_report",
+      "input_schema": {
+        "properties": {
+          "max_battles": {
+            "default": 50,
+            "description": "最多分析的战斗场数（默认 50，保留最近）",
+            "type": "integer"
+          },
+          "sessions": {
+            "default": 1,
+            "description": "读取最近的 session 文件数（默认 1）",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "battles",
+        "report"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "battles": {},
+          "report": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "battles",
+          "report"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "战斗复盘",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end.ef_run_task": {
+      "auto_start": false,
+      "description": "经 MaaEnd 官方运行器 MaaPiCli（-d 直通模式，完整 PI 语义：选项 case、agent 子进程）执行一个任务：写好 PI 配置后启动运行器，立即返回。name 用 list_tasks 里的任务名；options_json 是选项选择映射，例如 {\"选项名\": \"case 名\"}（可用值见 list_tasks 的 option_definitions）。NitroGen 代理正在玩时会拒绝（force=true 覆盖）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_run_task",
+      "input_schema": {
+        "properties": {
+          "adb_serial": {
+            "default": "",
+            "description": "ADB 控制器的设备地址（adb devices 的 serial，如 127.0.0.1:5555）",
+            "type": "string"
+          },
+          "controller": {
+            "default": "",
+            "description": "显式控制器名（空=自动：Windows 优先 Win32）；ADB/CloudADB 走手机端",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：NitroGen 正在玩时也强行启动（默认否）",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "任务名（先用 list_tasks 查，清单随 MaaEnd 版本变化）",
+            "type": "string"
+          },
+          "options_json": {
+            "default": "",
+            "description": "选项选择映射，JSON 对象，例如 {\"SellProductSchedule\": \"Daily\"}；默认空",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "执行任务",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end.ef_scene_status": {
+      "auto_start": false,
+      "description": "场景判别模型是否就绪：模型路径、类别表、加载耗时。排查 ef_scene 报错时先跑这个。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_scene_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "exists",
+        "ready",
+        "classes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "classes": {},
+          "exists": {},
+          "ready": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "exists",
+          "ready",
+          "classes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "场景模型状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.ef_status": {
+      "auto_start": false,
+      "description": "探测 MaaEnd 安装与运行库：安装路径、MaaFramework 版本、任务清单规模、游戏窗口是否在线、终末地本体安装与 verify_game 核验、写闸门状态。排查问题时先跑这个。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "found",
+        "runtime_version",
+        "task_count",
+        "game_window",
+        "game_install",
+        "verify_game",
+        "allow_run"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "allow_run": {},
+          "found": {},
+          "game_install": {},
+          "game_window": {},
+          "runtime_version": {},
+          "summary": {},
+          "task_count": {},
+          "verify_game": {}
+        },
+        "required": [
+          "summary",
+          "found",
+          "runtime_version",
+          "task_count",
+          "game_window",
+          "game_install",
+          "verify_game",
+          "allow_run"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_stop_task": {
+      "auto_start": false,
+      "description": "终止 MaaPiCli 运行器进程（任务立即停止；游戏本身不受影响）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_stop_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "停止任务",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.ef_stream": {
+      "auto_start": false,
+      "description": "读取本插件数据流（tasks 任务事件 / window 窗口状态 / yolo 检测）。since 传上次返回的 latest_id 即增量拉取；跨插件可调（陪伴/决策链路用）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_stream",
+      "input_schema": {
+        "properties": {
+          "category": {
+            "default": "",
+            "description": "tasks / window / yolo；空=全部",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "description": "最多返回条数（默认 50）",
+            "type": "integer"
+          },
+          "since": {
+            "default": 0,
+            "description": "上次读到的最大 id（增量游标）",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count",
+        "latest_id"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {},
+          "latest_id": {}
+        },
+        "required": [
+          "count",
+          "latest_id"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "数据流读取",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.ef_suite": {
+      "auto_start": false,
+      "description": "游戏插件套组全景：决策层（game_decision）引擎链状态、NitroGen 代理（nitrogen_agent）谁在玩、套组模式仲裁、本插件执行层状态，以及官方资源链接（MaaEnd / MAA / MaaFramework / BetterGI / NitroGen）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_suite",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "mode",
+        "decision_layer",
+        "nitrogen",
+        "links"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "decision_layer": {},
+          "links": {},
+          "mode": {},
+          "nitrogen": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "mode",
+          "decision_layer",
+          "nitrogen",
+          "links"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "套组全景",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_task_state": {
+      "auto_start": false,
+      "description": "查询 MaaPiCli 运行器的状态：运行中 / 已退出（退出码）+ 输出日志尾部。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_task_state",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "running",
+        "exit_code",
+        "output_tail"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "exit_code": {},
+          "output_tail": {},
+          "running": {}
+        },
+        "required": [
+          "running",
+          "exit_code",
+          "output_tail"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "任务进度",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.ef_yolo": {
+      "auto_start": false,
+      "description": "立即对终末地窗口截图跑一次 YOLO 目标检测（BetterGI 同款视觉路线；模型放 data/yolo/，默认随插件附带的终末地 9 类模型 endfield_yolo_v2.pt，可换自训模型）。跨插件可调：套组决策/陪伴链路用它看画面里有什么。返回 objects[{label,confidence,box}]。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_yolo",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "count",
+        "objects"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {},
+          "objects": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "count",
+          "objects"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "YOLO 视觉检测",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end.ef_zmdlogs_status": {
+      "auto_start": false,
+      "description": "ZMDLogs 战斗事件流（伤害/连携/buff）的接入状态：闸门、源码目录、Npcap、RSA 私钥、子进程存活、WS 端口、最近 stderr。卡关辅助没有数据或事件流起不来时先跑这个。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_zmdlogs_status",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "status",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "enabled",
+        "running",
+        "ws_open",
+        "ready",
+        "blocking"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "blocking": {},
+          "enabled": {},
+          "ready": {},
+          "running": {},
+          "summary": {},
+          "ws_open": {}
+        },
+        "required": [
+          "summary",
+          "enabled",
+          "running",
+          "ws_open",
+          "ready",
+          "blocking"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "战斗事件流状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end.status": {
+      "auto_start": false,
+      "description": "约定式状态入口（nitrogen_agent 等套组同伴探测『谁在玩』用）。running = MaaPiCli 是否正在执行任务。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "套组探测状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15.0
+    },
+    "maa_end:lifecycle:config_change": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "config_change",
+      "input_schema": {
+        "properties": {
+          "mode": {
+            "default": null
+          },
+          "new_config": {
+            "default": null
+          },
+          "old_config": {
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "config_change",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "maa_end:lifecycle:shutdown": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "shutdown",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "shutdown",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "maa_end:lifecycle:startup": {
+      "auto_start": false,
+      "description": "",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "lifecycle",
+      "extra": {},
+      "id": "startup",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "lifecycle",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "startup",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": null
+    },
+    "maa_end:plugin_entry:ef_adb": {
+      "auto_start": false,
+      "description": "ADB 设备列表与截图（手机端/模拟器数据截取）。action=list 列设备（adb devices -l）；action=screenshot 对 serial 截图（exec-out screencap），PNG 存 data/adb/ 并返回路径与大小。adb 路径由 maa.adb_path 配置（默认 PATH 上的 adb）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_adb",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list / screenshot",
+            "type": "string"
+          },
+          "serial": {
+            "default": "",
+            "description": "screenshot 时的设备地址",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "ADB 设备",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:ef_agent": {
+      "auto_start": false,
+      "description": "M3：切换套组模式到 nitrogen 并启动 NitroGen 视觉代理接管游戏（通用但无完成保证，进度靠画面人肉判断）。危险操作：confirm 必须为 true（用户明确同意）；目标进程默认 maa.nitrogen_target_process。结束后用 ef_stop_task 还原（停代理 + 切回 decision）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_agent",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "用户明确同意接管手柄才能 true",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：有同伴在玩也强行启动（默认否）",
+            "type": "boolean"
+          },
+          "target_process": {
+            "default": "",
+            "description": "目标进程名（默认 maa.nitrogen_target_process）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "视觉代理接管",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_assist": {
+      "auto_start": false,
+      "description": "陪聊默认 + 卡关辅助。action=state（默认，看状态与最近建议）/ config（读三项参数）/ set（改参数，即时生效，无需重启）/ check（立即跑一次判定）/ advice（对给定事件做一次分层输出，供对话内联调用；events_json 留空时用实时缓冲，需辅助在跑，只覆盖进行中的战斗，缓冲可能为空）。visual=true 时在 state/check 结果里附「场景佐证」（截屏+场景分类，只读；佐证仅供参考，不参与判定）。只读订阅本地事件流，**不点击、不注入、不接管游戏**。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_assist",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "state",
+            "description": "state / config / set / check / advice",
+            "type": "string"
+          },
+          "assist_mode": {
+            "default": "",
+            "description": "宏观建议 / 精细建议（空=不改）",
+            "type": "string"
+          },
+          "confidence_threshold": {
+            "default": "",
+            "description": "0.70 / 0.80 / 0.85 / 0.90（空=不改）",
+            "type": "string"
+          },
+          "consecutive_fail_threshold": {
+            "default": "",
+            "description": "2 / 3 / 5（空=不改）",
+            "type": "string"
+          },
+          "enable": {
+            "default": "",
+            "description": "true/false（空=不改）",
+            "type": "string"
+          },
+          "events_json": {
+            "default": "",
+            "description": "advice 用：事件 JSON 数组；留空=用实时缓冲（需辅助在跑，只覆盖进行中的战斗，缓冲可能为空）",
+            "type": "string"
+          },
+          "profile": {
+            "default": "",
+            "description": "A/B 配置档（空=用当前档）；改参数时写到该档",
+            "type": "string"
+          },
+          "visual": {
+            "default": "",
+            "description": "true=附场景佐证（截屏+场景分类，只读）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "陪玩辅助",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 20.0
+    },
+    "maa_end:plugin_entry:ef_decide": {
+      "auto_start": false,
+      "description": "把『帮我做终末地日常/基质/跑商…』这类请求交给游戏决策层（game_decision：gd_route 定意图 + gd_decide 对任务清单逐个打分），返回排序后的候选任务与理由；决策层不可用时退回词面匹配并如实标注 source。run=true 时直接执行第一候选（闸门与互斥同 ef_run_task）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_decide",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 5,
+            "description": "候选任务数上限（默认 5）",
+            "type": "integer"
+          },
+          "request": {
+            "description": "用户请求原文，如『清一下终末地日常』",
+            "type": "string"
+          },
+          "run": {
+            "default": false,
+            "description": "true=执行第一候选（需 maa.allow_run 放行）",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "candidates",
+        "route",
+        "engine"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "candidates": {},
+          "engine": {},
+          "route": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "candidates",
+          "route",
+          "engine"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "决策层派单",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end:plugin_entry:ef_endaxis": {
+      "auto_start": false,
+      "description": "3 套 Endaxis 排轴预设（开荒/精英/BOSS）。action=list 列预设；code 生成数据码（可粘进 MaaEnd 排轴设置）；compare 解析社区分享的轴码并与预设对比结构；run 经 RealTimeTask 的自动战斗排轴模式执行（与 ef_run_task 同一闸门与互斥）。members 是队伍人数 1-4，1 号位放主 C。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_endaxis",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list | code | compare | run",
+            "type": "string"
+          },
+          "code": {
+            "default": "",
+            "description": "compare 用：社区分享的轴数据码（base64url+gzip）",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "run 时套组互斥覆盖（同 ef_run_task）",
+            "type": "boolean"
+          },
+          "members": {
+            "default": 4,
+            "description": "队伍人数 1-4（超出号位的动作会被丢掉）",
+            "type": "integer"
+          },
+          "preset": {
+            "default": "开荒",
+            "description": "开荒 | 精英 | BOSS",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "排轴预设",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end:plugin_entry:ef_gamescaling": {
+      "auto_start": false,
+      "description": "M6：THUSI-Lab GameScaling（Qwen3.5 续训游戏 VLM）直接游玩——截图发用户自部署的 vLLM 服务，模型回 200ms 键鼠块，经 SendInput 真实注入。三重闸门：maa.gamescaling_enabled=true + maa.allow_run=true + confirm=true（缺一不可）。action=start 启动（前提：游戏开着、vLLM 在线、data/gamescaling/ 有系统提示词）；action=stop 停止并抬起全部按键；action=status（默认）看运行状态/解析率/延迟。与 M3 同级：无完成保证，人要看着。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_gamescaling",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "status",
+            "description": "start / stop / status",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "start 必填 true（用户明确同意键鼠接管）",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：NitroGen 正在玩时也强行启动（默认否）",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "GameScaling 视觉语言代理（M6）",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_kb": {
+      "auto_start": false,
+      "description": "查已采集的终末地资料：全文检索（干员/武器/物品/装备/敌人/剧情/任务/教学）、实体属性、干员清单、基建配方、MaaEnd 界面节点、辅助工具清单。数据来自 warfarin.wiki 全量、MaaEnd 界面流程、IndustrialPlanner 配方，均带来源与抓取时间。只读。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_kb",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "search",
+            "description": "search=全文检索 | entity=实体详情 | operators=干员清单 | recipe=基建配方 | node=界面节点 | tool=工具清单 | doc=单篇正文 | gamefile=解包产物索引 | gametable=游戏配置表 | gem=基质反查武器 | poi=地图兴趣点 | stats=库存统计",
+            "type": "string"
+          },
+          "category": {
+            "default": "",
+            "description": "doc=分类限定；gamefile=组名；gametable=条目 key；poi=区域",
+            "type": "string"
+          },
+          "limit": {
+            "default": 8,
+            "description": "返回条数上限（默认 8）",
+            "type": "integer"
+          },
+          "near": {
+            "default": "",
+            "description": "poi 用：'x,y,z' 世界坐标，给了就按距离由近到远排",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "description": "检索词 / 实体名 / 物品ID / 节点描述 / 文档 slug / 表名 / POI类型",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "action",
+        "query",
+        "result"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "action": {},
+          "query": {},
+          "result": {}
+        },
+        "required": [
+          "action",
+          "query",
+          "result"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "终末地知识库",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_list_tasks": {
+      "auto_start": false,
+      "description": "列出 MaaEnd interface.json 里声明的全部任务（名称、入口节点、描述、选项）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_list_tasks",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "tasks"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "summary": {},
+          "tasks": {}
+        },
+        "required": [
+          "summary",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "任务清单",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_modes": {
+      "auto_start": false,
+      "description": "七模式 probe 汇总（DESIGN-maaend-suite-modes.md）：M0 只读陪伴 / M1 MaaEndControl 控制服务 / M2 内置 PiRunner / M3 NitroGen 视觉代理 / M4 人工辅助 / M5 操作回放（operation_learner，仅显式进入）/ M6 GameScaling 视觉语言代理（VLM 键鼠，仅显式进入）。返回各模式可用性、当前选中与原因、失败计数，以及 MaaEnd 无效时的替代提议（M3 需用户确认）。只读，不拉起任何进程。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_modes",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "chosen",
+        "reason",
+        "modes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "chosen": {},
+          "modes": {},
+          "reason": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "chosen",
+          "reason",
+          "modes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "执行模式阶梯",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_ocr": {
+      "auto_start": false,
+      "description": "对终末地窗口截图跑 OCR（rapidocr，视觉 sidecar 执行，会把游戏带到前台）：返回 full_text 与逐行 lines（文本/置信度/框）。roi 可选 [x1,y1,x2,y2]（0-1 比例，JSON 数组）缩小范围提速。问「现在理智多少」「屏幕上写了什么」用它。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_ocr",
+      "input_schema": {
+        "properties": {
+          "roi": {
+            "default": "",
+            "description": "ROI [x1,y1,x2,y2]（0-1 比例）JSON 数组；空=全屏",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "full_text",
+        "lines"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "full_text": {},
+          "lines": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "full_text",
+          "lines"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "读屏 OCR",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_open_app": {
+      "auto_start": false,
+      "description": "启动 MaaEnd 应用本体（ automation 仍在 GUI 里操作时的备用入口）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_open_app",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "打开 MaaEnd",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:ef_remind": {
+      "auto_start": false,
+      "description": "M4 人工辅助：设一个提醒到点推送。kind=after_task（任务结束触发，value 填任务 entry 或留空=任意）、at_time（每天 HH:MM）、in_minutes（N 分钟后）。会话内存态：插件重载后清空（ef_reminders 可查/可取消）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_remind",
+      "input_schema": {
+        "properties": {
+          "kind": {
+            "default": "in_minutes",
+            "description": "after_task / at_time / in_minutes",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "提醒附言（可空）",
+            "type": "string"
+          },
+          "value": {
+            "default": "30",
+            "description": "after_task=任务entry(空=任意)；at_time=HH:MM；in_minutes=分钟数",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "设置提醒",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15.0
+    },
+    "maa_end:plugin_entry:ef_reminders": {
+      "auto_start": false,
+      "description": "查看/取消 M4 提醒。action=list（默认，含已触发历史）；action=cancel 时给 id 取消。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_reminders",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "list",
+            "description": "list / cancel",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "description": "取消时给提醒 id（如 r1）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "提醒清单",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15.0
+    },
+    "maa_end:plugin_entry:ef_replay": {
+      "auto_start": false,
+      "description": "M5：调 operation_learner 回放「示教/学习」到的操作（跨插件调用）。dry_run=true（默认）只校验预演、不注入输入；dry_run=false 会真实注入输入——需 maa.allow_run=true 且 confirm=true（与 M1/M2/M3 同级闸门）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_replay",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "非 dry_run 必填 true（用户明确同意注入）",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": true,
+            "description": "true = 只校验预演不注入（默认）",
+            "type": "boolean"
+          },
+          "intent": {
+            "default": "",
+            "description": "意图关键词（检索用）",
+            "type": "string"
+          },
+          "precision": {
+            "default": "auto",
+            "description": "auto / coarse / fine",
+            "type": "string"
+          },
+          "record_id": {
+            "default": "",
+            "description": "按记录 id 回放（空 = 按场景+意图检索）",
+            "type": "string"
+          },
+          "scene_id": {
+            "default": "",
+            "description": "场景 id（空 = 用 operation_learner 当前感知）",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "操作回放（M5）",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 90.0
+    },
+    "maa_end:plugin_entry:ef_report": {
+      "auto_start": false,
+      "description": "读 ZMDLogs 最近 N 个 session 事件流，生成对局 Markdown 复盘报告（战斗数 / 时长 / 伤害 / 阵亡 / 技能 / 失败判定与归因）。只读：不订阅、不注入、不写盘。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_report",
+      "input_schema": {
+        "properties": {
+          "max_battles": {
+            "default": 50,
+            "description": "最多分析的战斗场数（默认 50，保留最近）",
+            "type": "integer"
+          },
+          "sessions": {
+            "default": 1,
+            "description": "读取最近的 session 文件数（默认 1）",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "battles",
+        "report"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "battles": {},
+          "report": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "battles",
+          "report"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "战斗复盘",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end:plugin_entry:ef_run_task": {
+      "auto_start": false,
+      "description": "经 MaaEnd 官方运行器 MaaPiCli（-d 直通模式，完整 PI 语义：选项 case、agent 子进程）执行一个任务：写好 PI 配置后启动运行器，立即返回。name 用 list_tasks 里的任务名；options_json 是选项选择映射，例如 {\"选项名\": \"case 名\"}（可用值见 list_tasks 的 option_definitions）。NitroGen 代理正在玩时会拒绝（force=true 覆盖）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_run_task",
+      "input_schema": {
+        "properties": {
+          "adb_serial": {
+            "default": "",
+            "description": "ADB 控制器的设备地址（adb devices 的 serial，如 127.0.0.1:5555）",
+            "type": "string"
+          },
+          "controller": {
+            "default": "",
+            "description": "显式控制器名（空=自动：Windows 优先 Win32）；ADB/CloudADB 走手机端",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "套组互斥覆盖：NitroGen 正在玩时也强行启动（默认否）",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "任务名（先用 list_tasks 查，清单随 MaaEnd 版本变化）",
+            "type": "string"
+          },
+          "options_json": {
+            "default": "",
+            "description": "选项选择映射，JSON 对象，例如 {\"SellProductSchedule\": \"Daily\"}；默认空",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "执行任务",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 120.0
+    },
+    "maa_end:plugin_entry:ef_scene_status": {
+      "auto_start": false,
+      "description": "场景判别模型是否就绪：模型路径、类别表、加载耗时。排查 ef_scene 报错时先跑这个。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_scene_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "exists",
+        "ready",
+        "classes"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "classes": {},
+          "exists": {},
+          "ready": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "exists",
+          "ready",
+          "classes"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "场景模型状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:ef_status": {
+      "auto_start": false,
+      "description": "探测 MaaEnd 安装与运行库：安装路径、MaaFramework 版本、任务清单规模、游戏窗口是否在线、终末地本体安装与 verify_game 核验、写闸门状态。排查问题时先跑这个。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "found",
+        "runtime_version",
+        "task_count",
+        "game_window",
+        "game_install",
+        "verify_game",
+        "allow_run"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "allow_run": {},
+          "found": {},
+          "game_install": {},
+          "game_window": {},
+          "runtime_version": {},
+          "summary": {},
+          "task_count": {},
+          "verify_game": {}
+        },
+        "required": [
+          "summary",
+          "found",
+          "runtime_version",
+          "task_count",
+          "game_window",
+          "game_install",
+          "verify_game",
+          "allow_run"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_stop_task": {
+      "auto_start": false,
+      "description": "终止 MaaPiCli 运行器进程（任务立即停止；游戏本身不受影响）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_stop_task",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "停止任务",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:ef_stream": {
+      "auto_start": false,
+      "description": "读取本插件数据流（tasks 任务事件 / window 窗口状态 / yolo 检测）。since 传上次返回的 latest_id 即增量拉取；跨插件可调（陪伴/决策链路用）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_stream",
+      "input_schema": {
+        "properties": {
+          "category": {
+            "default": "",
+            "description": "tasks / window / yolo；空=全部",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "description": "最多返回条数（默认 50）",
+            "type": "integer"
+          },
+          "since": {
+            "default": 0,
+            "description": "上次读到的最大 id（增量游标）",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "count",
+        "latest_id"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {},
+          "latest_id": {}
+        },
+        "required": [
+          "count",
+          "latest_id"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "数据流读取",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:ef_suite": {
+      "auto_start": false,
+      "description": "游戏插件套组全景：决策层（game_decision）引擎链状态、NitroGen 代理（nitrogen_agent）谁在玩、套组模式仲裁、本插件执行层状态，以及官方资源链接（MaaEnd / MAA / MaaFramework / BetterGI / NitroGen）。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_suite",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "mode",
+        "decision_layer",
+        "nitrogen",
+        "links"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "decision_layer": {},
+          "links": {},
+          "mode": {},
+          "nitrogen": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "mode",
+          "decision_layer",
+          "nitrogen",
+          "links"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "套组全景",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_task_state": {
+      "auto_start": false,
+      "description": "查询 MaaPiCli 运行器的状态：运行中 / 已退出（退出码）+ 输出日志尾部。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_task_state",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "running",
+        "exit_code",
+        "output_tail"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "exit_code": {},
+          "output_tail": {},
+          "running": {}
+        },
+        "required": [
+          "running",
+          "exit_code",
+          "output_tail"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "任务进度",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:ef_yolo": {
+      "auto_start": false,
+      "description": "立即对终末地窗口截图跑一次 YOLO 目标检测（BetterGI 同款视觉路线；模型放 data/yolo/，默认随插件附带的终末地 9 类模型 endfield_yolo_v2.pt，可换自训模型）。跨插件可调：套组决策/陪伴链路用它看画面里有什么。返回 objects[{label,confidence,box}]。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_yolo",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "count",
+        "objects"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "count": {},
+          "objects": {},
+          "summary": {}
+        },
+        "required": [
+          "summary",
+          "count",
+          "objects"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "YOLO 视觉检测",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 60.0
+    },
+    "maa_end:plugin_entry:ef_zmdlogs_status": {
+      "auto_start": false,
+      "description": "ZMDLogs 战斗事件流（伤害/连携/buff）的接入状态：闸门、源码目录、Npcap、RSA 私钥、子进程存活、WS 端口、最近 stderr。卡关辅助没有数据或事件流起不来时先跑这个。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "ef_zmdlogs_status",
+      "input_schema": {
+        "properties": {
+          "action": {
+            "default": "status",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": [
+        "summary",
+        "enabled",
+        "running",
+        "ws_open",
+        "ready",
+        "blocking"
+      ],
+      "llm_result_schema": {
+        "properties": {
+          "blocking": {},
+          "enabled": {},
+          "ready": {},
+          "running": {},
+          "summary": {},
+          "ws_open": {}
+        },
+        "required": [
+          "summary",
+          "enabled",
+          "running",
+          "ws_open",
+          "ready",
+          "blocking"
+        ],
+        "type": "object"
+      },
+      "metadata": {},
+      "model_validate": true,
+      "name": "战斗事件流状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 30.0
+    },
+    "maa_end:plugin_entry:status": {
+      "auto_start": false,
+      "description": "约定式状态入口（nitrogen_agent 等套组同伴探测『谁在玩』用）。running = MaaPiCli 是否正在执行任务。",
+      "dynamic": false,
+      "enabled": true,
+      "event_type": "plugin_entry",
+      "extra": {},
+      "id": "status",
+      "input_schema": {
+        "properties": {},
+        "type": "object"
+      },
+      "kind": "action",
+      "llm_result_fields": null,
+      "llm_result_schema": null,
+      "metadata": {},
+      "model_validate": true,
+      "name": "套组探测状态",
+      "persist": null,
+      "quick_action": false,
+      "quick_action_config": {
+        "icon": null,
+        "priority": 0
+      },
+      "timeout": 15.0
+    }
+  },
+  "schema_version": 4,
+  "sdk_version": "0.1.0",
+  "source_bytes": 49712024,
+  "source_files": [
+    ".gitignore",
+    "LICENSE",
+    "README.md",
+    "__init__.py",
+    "_router_base.py",
+    "config.example.toml",
+    "data/gamescaling/build_prompt.py",
+    "data/gamescaling/endfield_system_prompt.txt",
+    "data/scene/scene_cls17.names.json",
+    "data/scene/scene_cls17.onnx",
+    "data/scene/scene_cls28.names.json",
+    "data/scene/scene_cls28.onnx",
+    "data/scene/scene_cls30.names.json",
+    "data/scene/scene_cls30.onnx",
+    "data/scene/scene_y11_30c.names.json",
+    "data/scene/scene_y11_30c.onnx",
+    "data/scene/scene_y26_30c.names.json",
+    "data/scene/scene_y26_30c.onnx",
+    "data/scene/scene_y26_33c.names.json",
+    "data/scene/scene_y26_33c.onnx",
+    "data/yolo/endfield_items_classes.txt",
+    "data/yolo/endfield_yolo_v2.meta.json",
+    "data/yolo/endfield_yolo_v2.pt",
+    "data/yolo/endfield_yolo_v2_960.meta.json",
+    "data/yolo/endfield_yolo_v2_960.pt",
+    "data/yolo/wiki_ontology.json",
+    "i18n/en.json",
+    "i18n/zh-CN.json",
+    "maaend/__init__.py",
+    "maaend/api/__init__.py",
+    "maaend/api/_helpers.py",
+    "maaend/api/assist.py",
+    "maaend/api/install.py",
+    "maaend/api/knowledge.py",
+    "maaend/api/llm_tools.py",
+    "maaend/api/m6.py",
+    "maaend/api/ops.py",
+    "maaend/api/task.py",
+    "maaend/api/vision.py",
+    "maaend/assist.py",
+    "maaend/assist_rules.py",
+    "maaend/backends/__init__.py",
+    "maaend/backends/agent.py",
+    "maaend/backends/catalog.py",
+    "maaend/backends/control.py",
+    "maaend/backends/gamescaling/__init__.py",
+    "maaend/backends/gamescaling/action.py",
+    "maaend/backends/gamescaling/keymaps.py",
+    "maaend/backends/gamescaling/policy.py",
+    "maaend/backends/gamescaling/prompt.py",
+    "maaend/backends/input_io.py",
+    "maaend/backends/maa_fw.py",
+    "maaend/backends/pi_runner.py",
+    "maaend/constants.py",
+    "maaend/domain/__init__.py",
+    "maaend/domain/events.py",
+    "maaend/endaxis.py",
+    "maaend/executor.py",
+    "maaend/infra/__init__.py",
+    "maaend/infra/logtail.py",
+    "maaend/infra/probe.py",
+    "maaend/kb.py",
+    "maaend/model_manager.py",
+    "maaend/ocr.py",
+    "maaend/ocr_sidecar.py",
+    "maaend/p2p_http.py",
+    "maaend/remind.py",
+    "maaend/report.py",
+    "maaend/router.py",
+    "maaend/scene.py",
+    "maaend/state.py",
+    "maaend/stream.py",
+    "maaend/suite.py",
+    "maaend/synthetic_events.py",
+    "maaend/vision/__init__.py",
+    "maaend/vision/capture.py",
+    "maaend/vision/frames.py",
+    "maaend/yolo.py",
+    "maaend/yolo_sidecar.py",
+    "maaend/zmdlogs.py",
+    "plugin.toml",
+    "pyproject.toml",
+    "ruff.toml",
+    "tests/conftest.py",
+    "tests/maaend_stub_run.py",
+    "tests/test_assist_logic.py",
+    "tests/test_assist_profiles.py",
+    "tests/test_config_contract.py",
+    "tests/test_daily_prepare.py",
+    "tests/test_detect_resource_dirs.py",
+    "tests/test_endaxis_compare.py",
+    "tests/test_entry_contract.py",
+    "tests/test_executor_logic.py",
+    "tests/test_gamescaling_logic.py",
+    "tests/test_lowlatency.py",
+    "tests/test_model_manager.py",
+    "tests/test_ocr_logic.py",
+    "tests/test_p2p_suite.py",
+    "tests/test_remind_logic.py",
+    "tests/test_report_logic.py",
+    "tests/test_smoke.py",
+    "tests/test_stream_dual_detector.py",
+    "tests/test_suite_logic.py",
+    "tests/test_verify_logic.py",
+    "tests/test_yolo_model.py",
+    "tests/test_zmdlogs_logic.py",
+    "third_party/Endfield_Vision_Models-LICENSE.txt",
+    "third_party/GameScaling-LICENSE.txt",
+    "third_party/ZMDLogs-LICENSE.txt",
+    "ui/panel.tsx"
+  ],
+  "source_sha256": "c806400eb2fb6001ca4633fbff62735e59bcd266b4be470846e3e44f94d3963e"
+}

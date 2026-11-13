@@ -1,0 +1,55 @@
+{
+ "version": "v3c",
+ "file_note": "文件名沿用 endfield_yolo_v2.pt 以免改插件配置；内容为 Round 98 v3c",
+ "replaced": "2026-10-25",
+ "backup": "endfield_yolo_v2_backup_20261025.pt / .meta.json (v2 原模型，回退时复制回来即可)",
+ "created": "2026-10-25 11:18",
+ "ultralytics": "8.4.163",
+ "base": "yolo26n.pt (COCO)",
+ "imgsz": 640,
+ "epochs": 30,
+ "best_epoch": 16,
+ "device": "cuda:0",
+ "batch": 8,
+ "train_frames": 4646,
+ "val_frames": 1007,
+ "dataset": "merge_v3c (synth 1920/480 + 真实帧; ui_icon=EF_items_26m teacher 真值, 其余类=v2 conf0.40 伪标签)",
+ "classes": [
+  "enemy",
+  "enemy_alert",
+  "boss",
+  "operator",
+  "enemy_name",
+  "operator_name",
+  "item_name",
+  "ui_button",
+  "ui_icon"
+ ],
+ "map50": 0.6024,
+ "map50_95": 0.4048,
+ "eval_r98_ap50": {
+  "note": "干净切片(未进 train)。real540p/raw1080 的非 icon 列 GT 是 v2 伪标签=与 v2 一致性，不是真值；rt30_val 是人工真值但只有 6 张",
+  "real540p": {"v3c": {"ui_icon": 0.921, "ui_button": 0.669, "item_name": 0.225, "enemy": 0.850}, "v2": {"ui_icon": 0.423, "ui_button": 0.949, "item_name": 0.827, "enemy": 0.982}},
+  "raw1080": {"v3c": {"ui_icon": 0.723, "ui_button": 0.336, "item_name": 0.995}, "v2": {"ui_icon": 0.394, "ui_button": 0.704, "item_name": 0.995}},
+  "rt30_val": {"v3c": {"map50": 0.251, "ui_button": 0.480, "ui_icon": 0.021}, "v2": {"map50": 0.257, "ui_button": 0.497, "ui_icon": 0.018}},
+  "synth_val": {"v3c": 0.995, "v2": 0.059}
+ },
+ "known_gaps": "operator 类训练框为 0（无法检出）；ui_button/item_name 在 v2 一致性口径下下降，待人工真值复核",
+ "v2_previous": {
+  "created": "2026-10-04 13:12:31",
+  "base": "yolo11n.pt",
+  "map50": 0.451,
+  "gold_map50": 0.672,
+  "gold_ap50_per_class": {
+   "enemy": 0.695,
+   "enemy_alert": 0.6125,
+   "boss": 0.9775,
+   "operator": 0.575,
+   "enemy_name": 0.9056,
+   "operator_name": 0.2783,
+   "item_name": 0.9937,
+   "ui_button": 0.659,
+   "ui_icon": 0.351
+  }
+ }
+}

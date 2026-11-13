@@ -1,0 +1,101 @@
+# MaaEnd 终末地助手 首次运行配置模板。
+
+[maa]
+# MaaEnd 安装根目录（里面有 MaaEnd.exe、maafw/、interface.json、resource/）。
+# 留空 = 自动探测常见安装位置；找不到就只在 status 里如实报告。
+maaend_dir = ""
+
+# 游戏窗口匹配：写入 PI 配置（MaaPiCli 据此绑定游戏窗口），也用于 run_task 前的快速预检。
+window_class_regex = "UnityWndClass"
+window_title_regex = "Endfield"
+# 游戏核验：auto = 检测到终末地安装（鹰角启动器 games/Arknights Endfield/Endfield.exe）才开；on / off 强制。
+# 开启时 run_task 前要求匹配窗口（类名和标题都命中）属于已安装的 Endfield.exe。
+verify_game = "auto"
+
+# adb 可执行路径（手机端/模拟器：run_task controller=ADB 与 ef_adb 截图用）。
+adb_path = "adb"
+
+# 任务执行总闸门：false 时 run_task 直接拒绝（启动自动化会接管游戏窗口输入）。
+allow_run = false
+
+# 单次任务等待上限（秒）。
+run_timeout_seconds = 7200
+# ---- 数据流(YUI 直读:任务事件/窗口/YOLO)----
+stream_enabled = true
+yolo_model = "endfield_yolo_v2.pt"  # 放 data/yolo/ 下;默认=随插件附带的终末地物品模型,可换自训模型
+yolo_confidence = 0.4
+yolo_operator_model = ""            # 干员专精模型(单类 operator),留空=关;与 yolo_model 并行跑,结果合并入同一条流
+yolo_operator_confidence = 0.3      # 专精模型自己的置信度门槛(单类模型普遍比 9 类模型保守)
+yolo_interval_seconds = 0          # 0=关定时采样(仅按需 detect);>0=每 N 秒自动检测入流
+window_interval_seconds = 5
+stream_max_entries = 300
+# ---- OCR 识别层(maa_ocr_read / maa_ocr_find;只读,不点击)----
+ocr_enabled = true                 # false=OCR 工具直接拒绝(不启 sidecar)
+ocr_min_confidence = 0.55          # 文字行置信度门槛(RapidOCR)
+ocr_ontology = "wiki_ontology.json"  # 放 data/yolo/ 下;命中即归类 enemy_name/operator_name/item_name;留空=只出文字不归类
+ocr_python = ""                    # 空=用 PATH 里的 python(需能 import rapidocr_onnxruntime)
+# ---- M1 控制服务(MaaEndControl,MaaEnd fork 的本地控制服务)----
+control_url = ""                   # 如 http://127.0.0.1:8829;空=M1 关闭,始终走内置 M2
+control_spawn = true               # 健康检查不通时由插件 spawn 安装目录里的 MaaEndControl.exe
+# ---- 模式调度(DESIGN-maaend-suite-modes.md: M0只读/M1服务/M2内置/M3视觉代理/M4人工/M5操作回放·仅显式/M6 GameScaling VLM·仅显式)----
+# 模式总表(执行/启动/辅助/学习/套组/模型模式与候选): 插件根 Stat.md
+fail_demotion_threshold = 2       # 连续失败 N 次后建议降级(只建议,不自动切)
+nitrogen_target_process = "Endfield.exe"  # M3 的目标进程
+
+# ---- M6 GameScaling 视觉语言代理(THUSI-Lab;帧 → 200ms 键鼠块 → SendInput 注入)----
+# 插件只做客户端:模型权重用户自行下载(HuggingFace THUSI-Lab/GameScaling-*)
+# 并用 vLLM 部署(bash scripts/serve_vllm.sh,见其 README),本机起在 8000 端口即可。
+# 三重闸门缺一不可:本开关 + allow_run + ef_gamescaling confirm=true。
+gamescaling_enabled = false            # 总闸门(默认关;false 时 ef_gamescaling start 直接拒绝)
+gamescaling_url = "http://127.0.0.1:8000/v1"  # vLLM OpenAI 兼容地址(含 /v1)
+gamescaling_model = "gamescaling"      # vLLM --served-model-name(脚本默认值)
+gamescaling_reasoning = true           # true=允许模型思考(准但慢);false=直出动作(跟手)
+gamescaling_history_len = 5            # 上下文保留的历史决策数(每条=1帧+1动作,越大越慢)
+gamescaling_max_chunks = 0             # >0 跑满 N 个 200ms 块自动停(0=不限,手动 stop)
+gamescaling_max_consecutive_errors = 5 # 连续 N 次请求失败自动熔断(抬键停止)
+gamescaling_prompt = "endfield_system_prompt.txt"  # data/gamescaling/ 下的完整系统提示词;键位是草案,按游戏内设置改(data/gamescaling/build_prompt.py 重新生成)
+# ---- 套组集成(NitroGen + 游戏决策层;全部只读调用,关掉即回到单插件形态)----
+suite_enabled = true               # 总开关:false 时 status/decide 不做任何跨插件探测
+decision_layer_id = "game_decision"   # 决策层插件(gd_route/gd_decide,ef_decide 派单用)
+nitrogen_agent_id = "nitrogen_agent"  # NitroGen 代理插件(run_task 前互斥探测)
+suite_mutual_exclusion = true      # NitroGen 在玩时拒绝启动 MaaPiCli(force=true 覆盖一次)
+
+# ---- 画面场景判别(maa_scene / maa_scene_expect / ef_scene_status;只读,不点击)----
+# 判断当前停在哪一屏(游戏内场景/地图/各类菜单界面),动手前先确认界面状态。
+# 模型放 data/scene/scene_y26_33c.onnx(33 类,YOLO26n-cls 微调)。
+# 训练集仍在迭代、指标是暂态的——准确率以最新评估记录为准,这里不写死数字。
+# data/scene/ 里还留着 17/28/30 类的旧权重,改 scene_model 即可切回。
+# 同一目录下的 scene_y26_33c.names.json 是类别表,换权重必须同步换它,否则类别名会错位。
+# 注意:模型置信度普遍偏低(十几%属正常),判定以 class 为准,别拿 confidence 当阈值。
+scene_enabled = true
+scene_model = "scene_y26_33c.onnx"
+
+# ---- 陪玩辅助(陪聊默认 + 卡关辅助自动触发;只读订阅,不点击/不注入/不接管游戏)----
+# 三项参数(assist_mode / confidence_threshold / consecutive_fail_threshold)对应设置面板的三个 Select,改完即时生效。
+assist_enabled = true              # 总开关:false 时不启动辅助服务
+assist_mode = "宏观建议"            # 宏观建议=只说失败原因类别;精细建议=额外给可执行动作
+confidence_threshold = 0.85        # 精细建议的归因置信度门槛,低于此值如实说明原因
+consecutive_fail_threshold = 3     # 连续失败几次算卡关(触发主动提醒)
+assist_poll_seconds = 5            # 事件轮询间隔(秒)
+assist_log_dir = ""                # ZMDLogs 的 logs 目录(降级数据源);留空=自动探测常见位置
+assist_ws_url = ""                 # 事件流 WS 地址;留空=ws://127.0.0.1:29325/ws
+
+# ---- 战斗事件流(ZMDLogs 子进程;网卡层抓包,权限更高,默认关闭)----
+# ZMDLogs 在网卡层抓游戏流量并用 RSA 私钥解密,产出伤害/连携/buff 事件,
+# 卡关辅助靠它做实时判定(关掉时辅助只能读 logs 目录里的历史事件)。
+# 前提:Npcap(WinPcap 兼容模式) + 管理员权限;源码/exe 都不入插件目录。
+# 启动模式(zmdlogs_launch_mode;模式总表见插件根 Stat.md):
+#   exe    = 直接拉预构建 EndfieldLogs.exe(官方 Releases 解压版)。密钥已编译进
+#            它的加密归档,开箱即用、不需外部私钥。
+#   source = 从源码树跑 python -m endfieldlogs serve。需外部 RSA 私钥
+#            (rsa_keys.txt / embedded_keys.py),上游故意不提供,缺它必秒退。
+zmdlogs_enabled = false           # 总闸门:false 时不启动任何子进程、不开端口
+zmdlogs_autostart = true           # false=只在 ef_zmdlogs_status(action=start) 时拉起
+zmdlogs_launch_mode = "exe"        # exe(推荐,自带密钥) | source(需外部 RSA 私钥)
+zmdlogs_exe = ""                   # EndfieldLogs.exe 路径;留空=探测 Downloads/Desktop/AppData
+zmdlogs_repo = ""                  # source 模式的源码目录;留空=探测 %USERPROFILE%/ZMDLogs
+zmdlogs_python = ""                # source 模式留空=优先用仓库 .venv/Scripts/python.exe
+zmdlogs_ws_port = 29325            # 事件流 WS 端口
+zmdlogs_log_dir = ""               # 留空=exe/仓库同级的 logs/
+zmdlogs_rsa_key = ""               # source 模式 RSA 私钥;留空=在仓库里找 rsa_keys.txt / embedded_keys.py
+zmdlogs_log_level = "INFO"
